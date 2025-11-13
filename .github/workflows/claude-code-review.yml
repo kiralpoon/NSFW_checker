@@ -3,12 +3,17 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Only run on code file changes, skip docs and config
+    paths:
+      - "app/**/*.py"
+      - "tests/**/*.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".dockerignore"
+      # Explicitly exclude documentation and static files
+      - "!**/*.md"
+      - "!static/**"
+      - "!*.md"
 
 jobs:
   claude-review:
@@ -53,5 +58,5 @@ jobs:
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
-
+          # Added Read, Grep, Glob tools so Claude can analyze code effectively
+          claude_args: '--allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
