@@ -97,9 +97,9 @@ NSFW - "Not Safe For Work" meaning content that is inappropriate for professiona
 
 ## Plan of Work
 
-### Milestone 1: Local API Development
+### Milestone 1: Local API Development with Visual Testing
 
-We will build a working API that runs on the local machine first, before deploying to the cloud. This milestone creates the core functionality: accepting image uploads, calling OpenAI for moderation, and returning classification results.
+We will build a working API that runs on the local machine and verify it works through browser-based testing before containerization. This milestone follows Test-Driven Development principles: we create the core functionality, add a web UI for visual testing, and thoroughly validate everything works locally before moving to Docker and cloud deployment. At the end of this milestone, you will be able to access a web interface at http://localhost:8080, upload test images through your browser, and see real-time classification results from OpenAI's moderation API.
 
 The project structure will be:
 
@@ -133,12 +133,14 @@ The app/main.py file will create the FastAPI application by importing FastAPI an
 
 The tests/test_api.py file will create basic tests including testing that the health endpoint returns 200, mocking OpenAI API responses, testing safe image classification, and testing unsafe image classification.
 
-At the end of this milestone, you will be able to run the API locally on port 8080, access the web UI at http://localhost:8080/ to upload images through a browser interface, upload a test image via HTTP request using tools like curl or Postman or a Python script, and receive a classification response. The OpenAI API key must be set in a .env file.
+The static directory files create a complete web UI. The static/index.html file provides the structure with file upload input, preview area, check button, and results display. The static/style.css file styles the interface with a modern, polished design including gradient backgrounds, card-style container, and color-coded results (green for safe, red for unsafe). The static/script.js file handles all client-side logic including file selection, image preview, FormData creation, fetch API calls to the backend, response parsing, and dynamic result display.
+
+At the end of this milestone, you must verify the following through browser testing: run the API locally on port 8080 with uvicorn, open a browser and navigate to http://localhost:8080/ to see the web UI, upload a clearly safe test image (like a landscape photo) and verify you receive "Safe" status with high confidence, upload a test image with concerning content and verify you receive "Not Safe" status with appropriate reasoning, check that the API documentation is accessible at http://localhost:8080/docs, and verify the health endpoint returns healthy status. Only after confirming all visual tests pass should you proceed to containerization. This TDD approach ensures the application works correctly before adding Docker complexity.
 
 
 ### Milestone 2: Containerization
 
-We will package the application into a Docker container so it can run consistently anywhere, including on GCP Cloud Run. Docker ensures that the application runs the same way in development, testing, and production environments.
+After verifying the application works correctly through local browser testing, we will package it into a Docker container. This milestone should only begin after you have successfully tested the web UI, uploaded multiple test images, and confirmed the API returns correct classifications. Docker ensures that the application runs the same way in development, testing, and production environments. We containerize last to avoid debugging Docker issues when the problem might be in the application code itself.
 
 The Dockerfile will use the official Python 3.11 slim base image to keep the container size small. It will set the working directory to /app, copy requirements.txt first and install dependencies (this ordering allows Docker to cache the dependency layer), copy the application code, copy the static files directory for the web UI, expose port 8080 which is Cloud Run's default, set the PORT environment variable to 8080, and set the CMD to run the uvicorn server listening on all interfaces (0.0.0.0) on the PORT.
 
@@ -265,7 +267,7 @@ Edit the file static/script.js. Add JavaScript code that listens for file input 
 This creates a complete web interface that users can access at http://localhost:8080/ to upload images and see the classification results visually.
 
 
-### Step 5: Run locally and test
+### Step 5: Run locally and verify with browser testing (CRITICAL VALIDATION CHECKPOINT)
 
 Working directory is the project root.
 
@@ -279,11 +281,19 @@ Expected output should show:
     INFO:     Waiting for application startup.
     INFO:     Application startup complete.
 
-Open a web browser and visit http://localhost:8080. You should see the web UI with a file upload interface. You can drag and drop an image or click to select a file, then click "Check Image" to see the classification result displayed on the page.
+BROWSER TESTING - YOU MUST COMPLETE ALL THESE TESTS BEFORE PROCEEDING:
 
-Visit http://localhost:8080/docs. FastAPI automatically generates interactive API documentation using Swagger UI. You can test the API directly from this page by clicking "Try it out" on any endpoint.
+Test 1 - Web UI Loads: Open a web browser and visit http://localhost:8080. You should see the web UI with a professional-looking interface containing a file upload button, heading "NSFW Image Detection API", and instructions. The interface should have a gradient purple background with a white card container. If the UI doesn't load or looks broken, stop and fix the static files before continuing.
 
-To test with curl from the command line, first prepare a test image file. Then run:
+Test 2 - Safe Image Classification: Prepare a clearly safe test image such as a landscape, building, or everyday object. Click the file input, select your safe image. You should see a preview of the image appear on the page. Click "Check Image" button. The button should show "Checking..." while processing. After a few seconds, you should see a green result box with "Safe" status, high confidence (above 90%), and low category scores. If you get "Not Safe" for a clearly safe image, review the custom rules logic in nsfw_checker.py.
+
+Test 3 - NSFW Image Classification: Prepare a test image that should be flagged (use appropriate test images that comply with OpenAI policies). Upload it through the web UI. You should see a red result box with "Not Safe" status, the reason explaining why (e.g., "Sexual content detected"), and high scores in relevant categories. If a concerning image returns "Safe", the moderation API may not be working correctly.
+
+Test 4 - Error Handling: Try uploading a non-image file like a .txt file. You should see an error message. Try uploading an extremely large image (over 25MB if possible). You should see a file size error message.
+
+Test 5 - API Documentation: Visit http://localhost:8080/docs. You should see the auto-generated Swagger UI documentation showing all endpoints: GET /, GET /health, POST /check-image, and POST /check-image-base64. Click "Try it out" on the /health endpoint and execute it. You should get {"status": "healthy"} response.
+
+Test 6 - Command Line Testing (Optional): To test with curl from the command line, first prepare a test image file. Then run:
 
     curl -X POST http://localhost:8080/check-image -F "file=@test_image.jpg"
 
@@ -306,6 +316,8 @@ Expected response for a safe image (example):
         "violence": 0.001
       }
     }
+
+VALIDATION CHECKPOINT: You MUST successfully complete Tests 1-5 above before proceeding to Step 6 (Docker). If any test fails, debug and fix the issue now while running locally. It is much easier to debug problems in the local Python environment than inside a Docker container. Do not skip these tests.
 
 If you see a JSON response with status, reason, confidence and categories, the API is working correctly with OpenAI. If you get an error, check that your OPENAI_API_KEY is correctly set in the .env file and that you have network access to OpenAI's API.
 
@@ -534,9 +546,9 @@ Test that the API still works after this change by calling the health and check-
 
 ## Validation and Acceptance
 
-The system is successfully implemented when all of the following are true.
+The system follows Test-Driven Development with visual validation. Each milestone must be fully validated before proceeding to the next. The system is successfully implemented when all of the following are true.
 
-First, local development works: Running uvicorn app.main:app --reload --port 8080 from the project root with the virtual environment activated starts a web server at http://localhost:8080. Visiting http://localhost:8080/ shows the web UI with file upload interface. Visiting /docs shows interactive API documentation with Swagger UI displaying the root GET endpoint (serves web UI), health GET endpoint, check-image POST endpoint, and check-image-base64 POST endpoint.
+First, local development works: Running uvicorn app.main:app --reload --port 8080 from the project root with the virtual environment activated starts a web server at http://localhost:8080. Visiting http://localhost:8080/ shows the web UI with file upload interface displaying a modern, polished design with gradient background and white card container. Visiting /docs shows interactive API documentation with Swagger UI displaying the root GET endpoint (serves web UI), health GET endpoint, check-image POST endpoint, and check-image-base64 POST endpoint.
 
 Second, image classification works: Uploading a test image via POST /check-image returns valid JSON containing these fields: status with value either "Safe" or "Not Safe", reason with a text explanation, confidence with a number between 0 and 1, categories with an object containing boolean flags for each category like sexual, hate, violence, and category_scores with an object containing numeric scores for each category.
 
@@ -544,15 +556,17 @@ Third, safe image test passes: Uploading a clearly safe image such as a landscap
 
 Fourth, unsafe image test passes: Uploading an image with nudity or sexual content returns JSON with "status": "Not Safe" and reason mentioning "Sexual content detected" or similar. Use appropriate test images that comply with OpenAI's usage policies.
 
-Fifth, Docker build succeeds: Running docker build -t nsfw-checker . completes without errors and produces an image. Running docker run -p 8080:8080 -e OPENAI_API_KEY=key nsfw-checker starts the service and it's accessible at localhost:8080. Calling the health endpoint returns the healthy status.
+Fifth, browser testing passes BEFORE containerization: All tests in Step 5 (Web UI loads, safe image classification, NSFW image classification, error handling, API documentation) must pass successfully when running locally without Docker. You must visually confirm the web interface works, upload test images through the browser, and see correct color-coded results (green for safe, red for unsafe) before proceeding to Docker. This is the critical TDD validation checkpoint.
 
-Sixth, Cloud Run deployment succeeds: After running the gcloud run deploy command, the service is live at a Cloud Run URL like https://nsfw-checker-xyz.run.app. Visiting the URL with /health appended returns {"status":"healthy"}.
+Sixth, Docker build succeeds AFTER local validation: Only after completing browser testing, running docker build -t nsfw-checker . completes without errors and produces an image. Running docker run -p 8080:8080 -e OPENAI_API_KEY=key nsfw-checker starts the service and it's accessible at localhost:8080. Calling the health endpoint returns the healthy status. The web UI should work identically inside Docker as it did locally.
 
-Seventh, Cloud Run image check works: Using curl or an HTTP client to POST an image to the Cloud Run URL at the /check-image endpoint returns the same JSON structure as local testing. This proves the deployed service works end-to-end including receiving requests, processing images, calling OpenAI, and returning results.
+Seventh, Cloud Run deployment succeeds: After running the gcloud run deploy command, the service is live at a Cloud Run URL like https://nsfw-checker-xyz.run.app. Visiting the URL with /health appended returns {"status":"healthy"}.
 
-Eighth, OpenAI integration is verified: The API returns responses with detailed category_scores that show various numeric scores. These scores could only come from OpenAI's moderation model, confirming the integration works. If you see errors like "invalid API key" the API key is wrong. If you see errors like "model not found" the OpenAI API may have changed and the code needs updating per the notes section.
+Eighth, Cloud Run image check works: Using curl or an HTTP client to POST an image to the Cloud Run URL at the /check-image endpoint returns the same JSON structure as local testing. This proves the deployed service works end-to-end including receiving requests, processing images, calling OpenAI, and returning results.
 
-Ninth, web UI works: Visiting the Cloud Run service URL in a web browser displays the web UI. Uploading an image through the web interface shows the classification result formatted nicely on the page, proving the static file serving and frontend JavaScript work correctly in the deployed environment.
+Ninth, OpenAI integration is verified: The API returns responses with detailed category_scores that show various numeric scores. These scores could only come from OpenAI's moderation model, confirming the integration works. If you see errors like "invalid API key" the API key is wrong. If you see errors like "model not found" the OpenAI API may have changed and the code needs updating per the notes section.
+
+Tenth, web UI works in production: Visiting the Cloud Run service URL in a web browser displays the web UI. Uploading an image through the web interface shows the classification result formatted nicely on the page, proving the static file serving and frontend JavaScript work correctly in the deployed environment.
 
 
 ### Testing Commands
@@ -956,4 +970,6 @@ Plan Revision History:
 - 2025-11-13: Added simple web UI for browser-based testing per user request. User wanted an easy way to test without always using command line. Web UI includes static HTML/CSS/JS files served by FastAPI, with drag-and-drop file upload, visual feedback, and formatted results display. Updated project structure, progress checklist, decision log, Dockerfile, and all relevant sections. Command-line testing remains available alongside web UI.
 
 - 2025-11-13: Fixed critical implementation gaps identified in plan review. Updated Step 3 to use modern OpenAI SDK client pattern (OpenAI client instance) instead of deprecated global API key pattern. Added Step 4.5 with complete web UI implementation instructions for creating static/index.html, static/style.css, and static/script.js files. Updated Step 4 to include CORS middleware configuration and static file mounting. Updated Step 1 to include creating static directory. Updated Step 6 Dockerfile to copy static files. Updated validation section to include web UI testing. These changes ensure the plan is fully implementable end-to-end without missing critical components.
+
+- 2025-11-13: Restructured plan to follow Test-Driven Development (TDD) methodology with visual browser testing. Updated Milestone 1 to emphasize that browser testing is part of local development, not an afterthought. Added comprehensive browser testing requirements in Step 5 with six explicit tests that must pass before containerization. Made Step 5 a "CRITICAL VALIDATION CHECKPOINT" requiring successful visual testing of the web UI, safe image classification, NSFW image classification, error handling, and API documentation before proceeding to Docker. Updated Milestone 2 to explicitly state it should only begin after local browser testing succeeds. Updated Validation and Acceptance section to number browser testing as Fifth (before Docker) and Docker validation as Sixth (after browser testing). This ensures the application is proven to work correctly in the simpler local environment before adding Docker complexity, following TDD best practices and reducing debugging difficulty.
 
