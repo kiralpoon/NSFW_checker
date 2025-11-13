@@ -54,6 +54,22 @@ The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serve
   Rationale: User requested an easy way to test without command-line tools. A single-page HTML interface with drag-and-drop file upload provides immediate visual feedback and makes the API accessible to non-technical users. FastAPI can serve static files directly without needing a separate frontend server.
   Date: 2025-11-13
 
+- Decision: Use OpenAI Moderation API directly with images (not two-step vision approach)
+  Rationale: OpenAI's moderation API now supports images directly as confirmed in official documentation. This simplifies implementation significantly, reduces API calls, lowers latency, and eliminates the complexity of the vision-model-then-moderation fallback approach. Single API call is more reliable and maintainable.
+  Date: 2025-11-13
+
+- Decision: Set file size limit to 25MB maximum
+  Rationale: Prevents malicious users from uploading extremely large files that could cause memory issues or denial of service. 25MB is sufficient for high-resolution photos while protecting the service. Implemented as configurable MAX_FILE_SIZE_MB environment variable for flexibility.
+  Date: 2025-11-13
+
+- Decision: Update to November 2025 stable package versions
+  Rationale: Original plan used versions from late 2023. Updating to current stable versions (FastAPI 0.115.0, OpenAI 1.51.0, Python 3.12) ensures compatibility with latest OpenAI API features including direct image moderation support, security patches, and performance improvements.
+  Date: 2025-11-13
+
+- Decision: Use Google Secret Manager as primary deployment approach
+  Rationale: Storing API keys in plain environment variables exposes them in command history and Cloud Run console. Secret Manager encrypts secrets at rest, provides access logging, and follows security best practices for production deployments. Environment variables remain available for local development convenience.
+  Date: 2025-11-13
+
 
 ## Outcomes & Retrospective
 
@@ -111,20 +127,20 @@ The requirements.txt file will list these Python packages: fastapi for the web f
 
 The app/config.py file will create a configuration class using Pydantic's BaseSettings that loads the OpenAI API key from environment variables and validates that it exists.
 
-The app/nsfw_checker.py file will implement the core logic with these functions: a function to encode images to base64 which is required for OpenAI API, a function to call OpenAI's API with the image, a function to parse the moderation response, a function to apply custom rules based on confidence thresholds and category filtering, and finally return a simple decision of "Safe" or "Not Safe" with reasoning.
+The app/nsfw_checker.py file will implement the core logic with these functions: create an OpenAI client instance using the modern SDK pattern, a function to encode images to base64 which is required for OpenAI API, a function to call OpenAI's API with the image (with fallback to two-step vision plus moderation if direct image support is unavailable), a function to parse the moderation response, a function to apply custom rules based on confidence thresholds and category filtering, and finally return a simple decision of "Safe" or "Not Safe" with reasoning.
 
-The app/main.py file will create the FastAPI application by importing FastAPI and creating an app instance, defining a POST endpoint at /check-image that accepts either file upload via multipart/form-data or JSON with base64-encoded image string, calling the nsfw_checker functions, and returning JSON response with status ("Safe" or "Not Safe"), reason, confidence (0.0-1.0), and categories. It will also add a GET endpoint at /health for health checks which is required by Cloud Run, and enable CORS if needed for web browser clients.
+The app/main.py file will create the FastAPI application by importing FastAPI and creating an app instance, adding CORS middleware to allow browser requests, mounting the static files directory to serve the web UI, defining a GET endpoint at / that serves the web UI HTML file, defining a POST endpoint at /check-image that accepts file upload via multipart/form-data, defining a POST endpoint at /check-image-base64 that accepts JSON with base64-encoded image string, calling the nsfw_checker functions, and returning JSON response with status ("Safe" or "Not Safe"), reason, confidence (0.0-1.0), and categories. It will also add a GET endpoint at /health for health checks which is required by Cloud Run.
 
 The tests/test_api.py file will create basic tests including testing that the health endpoint returns 200, mocking OpenAI API responses, testing safe image classification, and testing unsafe image classification.
 
-At the end of this milestone, you will be able to run the API locally on port 8080, upload a test image via HTTP request using tools like curl or Postman or a Python script, and receive a classification response. The OpenAI API key must be set in a .env file.
+At the end of this milestone, you will be able to run the API locally on port 8080, access the web UI at http://localhost:8080/ to upload images through a browser interface, upload a test image via HTTP request using tools like curl or Postman or a Python script, and receive a classification response. The OpenAI API key must be set in a .env file.
 
 
 ### Milestone 2: Containerization
 
 We will package the application into a Docker container so it can run consistently anywhere, including on GCP Cloud Run. Docker ensures that the application runs the same way in development, testing, and production environments.
 
-The Dockerfile will use the official Python 3.11 slim base image to keep the container size small. It will set the working directory to /app, copy requirements.txt first and install dependencies (this ordering allows Docker to cache the dependency layer), copy the application code, expose port 8080 which is Cloud Run's default, set the PORT environment variable to 8080, and set the CMD to run the uvicorn server listening on all interfaces (0.0.0.0) on the PORT.
+The Dockerfile will use the official Python 3.11 slim base image to keep the container size small. It will set the working directory to /app, copy requirements.txt first and install dependencies (this ordering allows Docker to cache the dependency layer), copy the application code, copy the static files directory for the web UI, expose port 8080 which is Cloud Run's default, set the PORT environment variable to 8080, and set the CMD to run the uvicorn server listening on all interfaces (0.0.0.0) on the PORT.
 
 The .dockerignore file will exclude unnecessary files from the Docker image including .env (secrets should never be in the container image), __pycache__ and *.pyc files, .git and .gitignore, the tests/ directory, and any local virtual environments.
 
@@ -162,24 +178,25 @@ First create a Python virtual environment with python -m venv venv, then activat
 
 Create the requirements.txt file with these exact contents:
 
-    fastapi==0.104.1
-    uvicorn[standard]==0.24.0
-    python-multipart==0.0.6
-    openai==1.3.0
-    pillow==10.1.0
-    python-dotenv==1.0.0
-    pydantic-settings==2.1.0
-    pytest==7.4.3
-    httpx==0.25.2
+    fastapi==0.115.0
+    uvicorn[standard]==0.30.6
+    python-multipart==0.0.12
+    openai==1.51.0
+    pillow==10.4.0
+    python-dotenv==1.0.1
+    pydantic-settings==2.5.2
+    pytest==8.3.3
+    httpx==0.27.2
 
 Install all dependencies with pip install -r requirements.txt.
 
-Create the directory structure. On Windows use mkdir app tests and type nul > app\__init__.py and similar for other files. On Mac/Linux use mkdir app tests and touch app/__init__.py. Create these empty files: app/__init__.py, app/main.py, app/nsfw_checker.py, app/config.py, tests/__init__.py, tests/test_api.py.
+Create the directory structure. On Windows use mkdir app tests static and type nul > app\__init__.py and similar for other files. On Mac/Linux use mkdir app tests static and touch app/__init__.py. Create these empty files: app/__init__.py, app/main.py, app/nsfw_checker.py, app/config.py, tests/__init__.py, tests/test_api.py. The static directory will hold the web UI files created in a later step.
 
 Create .env.example file with these lines:
 
     OPENAI_API_KEY=sk-your-key-here
     PORT=8080
+    MAX_FILE_SIZE_MB=25
 
 Copy .env.example to .env and edit it to add your actual OpenAI API key.
 
@@ -188,24 +205,22 @@ Expected output: Directory structure created, dependencies installed successfull
 
 ### Step 2: Implement configuration management
 
-Edit the file app/config.py. Import BaseSettings from pydantic_settings. Create a Settings class that inherits from BaseSettings. Add two fields: openai_api_key as a required string, and port as an integer with default value 8080. Inside the Settings class, create a nested Config class with env_file = ".env". Finally create a module-level variable settings = Settings() which will load and validate the configuration when imported.
+Edit the file app/config.py. Import BaseSettings from pydantic_settings. Create a Settings class that inherits from BaseSettings. Add three fields: openai_api_key as a required string, port as an integer with default value 8080, and max_file_size_mb as an integer with default value 25. Inside the Settings class, create a nested Config class with env_file = ".env". Finally create a module-level variable settings = Settings() which will load and validate the configuration when imported.
 
-This loads environment variables automatically from the .env file and validates that openai_api_key is present, raising an error if it's missing.
+This loads environment variables automatically from the .env file and validates that openai_api_key is present, raising an error if it's missing. The max_file_size_mb setting controls the maximum allowed upload size to prevent denial of service attacks.
 
 
 ### Step 3: Implement NSFW checker logic
 
 Edit the file app/nsfw_checker.py. This is the core module that handles all the NSFW detection logic.
 
-Import the necessary modules: base64, BytesIO from io, Dict and Tuple from typing, Image from PIL, openai, and settings from app.config.
+Import the necessary modules: base64, BytesIO from io, Dict and Tuple from typing, Image from PIL, OpenAI from openai, and settings from app.config.
 
-Set openai.api_key to settings.openai_api_key so all API calls use the configured key.
+Create an OpenAI client instance at module level: client = OpenAI(api_key=settings.openai_api_key). This uses the modern OpenAI SDK pattern where you create a client instance rather than setting a global API key.
 
 Define encode_image_to_base64 function that takes image_bytes as bytes parameter and returns a string. Use base64.b64encode to encode the bytes and decode to string with utf-8.
 
-Define check_image_with_openai function that takes image_bytes and returns a Dict. This sends the image to OpenAI for moderation analysis. Call encode_image_to_base64 to get the base64 string, then call openai.moderations.create passing input as a data URI like "data:image/jpeg;base64," followed by the base64 string. Return the first result as a dictionary using model_dump().
-
-Note: As of 2025, verify with OpenAI docs whether the moderation API accepts images directly. If not, you may need a two-step process: first use openai.chat.completions.create with a vision model like gpt-4-vision-preview to describe the image, then pass that description to openai.moderations.create.
+Define check_image_with_openai function that takes image_bytes and returns a Dict. This sends the image to OpenAI's moderation API for analysis. Call encode_image_to_base64 to get the base64 string. Create a data URI in the format "data:image/jpeg;base64," followed by the base64 string. Call client.moderations.create with input set to the data URI. The OpenAI moderation API supports direct image analysis as of November 2024. Extract the first result from the response and convert it to a dictionary using model_dump() or dict() conversion. Return this dictionary containing the moderation analysis.
 
 Define apply_custom_rules function that takes moderation_result dictionary and returns a Tuple of (status string, reason string, confidence float). This applies custom business logic on top of OpenAI's results. Get the categories and scores dictionaries from the moderation_result. If the moderation_result flagged field is True, find which categories triggered by checking which ones are True. If any category contains "minor" (case-insensitive), return "Not Safe", "Content may involve minors", 0.95. If the sexual category is True, get the sexual confidence score and return "Not Safe", "Sexual content detected", and that confidence. For other violations return "Not Safe" with the triggered category names and 0.85 confidence. Even if not flagged, check if the sexual score is above 0.7 as a custom threshold and return "Not Safe" with high probability message. Otherwise return "Safe", "No concerning content detected", and compute confidence as 1.0 minus the maximum of all scores.
 
@@ -216,21 +231,38 @@ Define check_nsfw function that takes image_bytes and returns a Dict. This is th
 
 Edit the file app/main.py. This creates the web API with all the endpoints.
 
-Import FastAPI, File, UploadFile, and HTTPException from fastapi. Import JSONResponse from fastapi.responses. Import BaseModel from pydantic. Import base64. Import check_nsfw from app.nsfw_checker.
+Import FastAPI, File, UploadFile, and HTTPException from fastapi. Import JSONResponse from fastapi.responses. Import StaticFiles from fastapi.staticfiles. Import CORSMiddleware from fastapi.middleware.cors. Import BaseModel from pydantic. Import base64. Import check_nsfw from app.nsfw_checker. Import settings from app.config.
 
 Create the app instance with FastAPI(title="NSFW Image Detection API", description="Check if images contain NSFW content using OpenAI moderation", version="1.0.0").
 
+Add CORS middleware to allow browser-based requests. Use app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]). This enables cross-origin requests from web browsers.
+
+Mount the static files directory. Use app.mount("/static", StaticFiles(directory="static"), name="static") to serve files from the static directory.
+
 Define a Pydantic model class ImageBase64Request with one field: image_base64 as a string.
 
-Define a GET endpoint at "/" that returns a dictionary with message "NSFW Image Detection API" and an endpoints dictionary listing the available endpoints and their purposes.
+Define a GET endpoint at "/" that serves the web UI. Import FileResponse from fastapi.responses. Return FileResponse("static/index.html") to serve the web UI at the root path. This allows users to access the web interface directly at http://localhost:8080/.
 
 Define a GET endpoint at "/health" decorated with @app.get that returns {"status": "healthy"}. Add a docstring explaining this is required by Cloud Run.
 
-Define a POST endpoint at "/check-image" that takes a file parameter of type UploadFile from File(...). The function should be async. Add docstring explaining it checks uploaded image files. First check if file.content_type starts with "image/" and raise HTTPException(400, "File must be an image") if not. In a try block, await file.read() to get image_bytes, call check_nsfw(image_bytes) to get result, and return JSONResponse(content=result). In except block raise HTTPException(500) with error message.
+Define a POST endpoint at "/check-image" that takes a file parameter of type UploadFile from File(...). The function should be async. Add docstring explaining it checks uploaded image files. First check if file.content_type starts with "image/" and raise HTTPException(400, "File must be an image") if not. In a try block, await file.read() to get image_bytes. Check if the size of image_bytes exceeds settings.max_file_size_mb multiplied by 1024 * 1024 (to convert MB to bytes), and if so raise HTTPException(413, f"File size exceeds maximum allowed size of {settings.max_file_size_mb}MB"). Then call check_nsfw(image_bytes) to get result, and return JSONResponse(content=result). In except block catch HTTPException and re-raise it, otherwise raise HTTPException(500) with error message.
 
-Define a POST endpoint at "/check-image-base64" that takes a request parameter of type ImageBase64Request. The function should be async. Add docstring explaining it checks base64-encoded images. In a try block, decode the base64 string with base64.b64decode(request.image_base64), call check_nsfw with those bytes, and return JSONResponse with the result. In except block raise HTTPException(500) with error message.
+Define a POST endpoint at "/check-image-base64" that takes a request parameter of type ImageBase64Request. The function should be async. Add docstring explaining it checks base64-encoded images. In a try block, decode the base64 string with base64.b64decode(request.image_base64) to get image_bytes. Check if the size of image_bytes exceeds settings.max_file_size_mb multiplied by 1024 * 1024, and if so raise HTTPException(413, f"File size exceeds maximum allowed size of {settings.max_file_size_mb}MB"). Then call check_nsfw with those bytes, and return JSONResponse with the result. In except block catch HTTPException and re-raise it, otherwise raise HTTPException(500) with error message.
 
-This creates the web API with endpoints for uploading images directly or sending base64-encoded images, plus health check and root info endpoints.
+This creates the web API with endpoints for uploading images directly or sending base64-encoded images, plus health check and web UI endpoints.
+
+
+### Step 4.5: Create web UI for browser-based testing
+
+Create the web UI files that allow users to test the API through a browser interface without using command-line tools.
+
+Edit the file static/index.html. Create a complete HTML page with a head section containing title "NSFW Image Detection API" and a link to static/style.css. In the body, create a container div with a heading "NSFW Image Detection API", a file input element with type="file" and accept="image/*", a button labeled "Check Image", a div with id="preview" to show the selected image, and a div with id="result" to display the API response. Add a script tag at the end that sources static/script.js.
+
+Edit the file static/style.css. Add styles for the body with font-family, background-color, and padding. Style the container with max-width, margin auto, background white, padding, border-radius, and box-shadow. Style the file input and button with padding, margin, and cursor pointer. Style the preview div to display images with max-width and margin. Style the result div with padding, margin-top, border-radius, and different background colors for safe (green) and unsafe (red) statuses.
+
+Edit the file static/script.js. Add JavaScript code that listens for file input changes and displays a preview of the selected image in the preview div. Add a click handler for the button that reads the selected file, creates a FormData object, appends the file, and sends a POST request to /check-image endpoint. Display the response in the result div, formatting it nicely with the status, reason, confidence, and categories. Show loading state while the request is in progress. Handle errors by displaying error messages in the result div.
+
+This creates a complete web interface that users can access at http://localhost:8080/ to upload images and see the classification results visually.
 
 
 ### Step 5: Run locally and test
@@ -247,7 +279,7 @@ Expected output should show:
     INFO:     Waiting for application startup.
     INFO:     Application startup complete.
 
-Open a web browser and visit http://localhost:8080. You should see the API welcome message with the endpoints listed.
+Open a web browser and visit http://localhost:8080. You should see the web UI with a file upload interface. You can drag and drop an image or click to select a file, then click "Check Image" to see the classification result displayed on the page.
 
 Visit http://localhost:8080/docs. FastAPI automatically generates interactive API documentation using Swagger UI. You can test the API directly from this page by clicking "Try it out" on any endpoint.
 
@@ -296,6 +328,9 @@ Write these lines:
     
     # Copy application code
     COPY app/ ./app/
+    
+    # Copy static files for web UI
+    COPY static/ ./static/
     
     # Cloud Run expects the app to listen on PORT env var
     ENV PORT=8080
@@ -501,7 +536,7 @@ Test that the API still works after this change by calling the health and check-
 
 The system is successfully implemented when all of the following are true.
 
-First, local development works: Running uvicorn app.main:app --reload --port 8080 from the project root with the virtual environment activated starts a web server at http://localhost:8080. Visiting /docs shows interactive API documentation with Swagger UI displaying the root GET endpoint, health GET endpoint, check-image POST endpoint, and check-image-base64 POST endpoint.
+First, local development works: Running uvicorn app.main:app --reload --port 8080 from the project root with the virtual environment activated starts a web server at http://localhost:8080. Visiting http://localhost:8080/ shows the web UI with file upload interface. Visiting /docs shows interactive API documentation with Swagger UI displaying the root GET endpoint (serves web UI), health GET endpoint, check-image POST endpoint, and check-image-base64 POST endpoint.
 
 Second, image classification works: Uploading a test image via POST /check-image returns valid JSON containing these fields: status with value either "Safe" or "Not Safe", reason with a text explanation, confidence with a number between 0 and 1, categories with an object containing boolean flags for each category like sexual, hate, violence, and category_scores with an object containing numeric scores for each category.
 
@@ -516,6 +551,8 @@ Sixth, Cloud Run deployment succeeds: After running the gcloud run deploy comman
 Seventh, Cloud Run image check works: Using curl or an HTTP client to POST an image to the Cloud Run URL at the /check-image endpoint returns the same JSON structure as local testing. This proves the deployed service works end-to-end including receiving requests, processing images, calling OpenAI, and returning results.
 
 Eighth, OpenAI integration is verified: The API returns responses with detailed category_scores that show various numeric scores. These scores could only come from OpenAI's moderation model, confirming the integration works. If you see errors like "invalid API key" the API key is wrong. If you see errors like "model not found" the OpenAI API may have changed and the code needs updating per the notes section.
+
+Ninth, web UI works: Visiting the Cloud Run service URL in a web browser displays the web UI. Uploading an image through the web interface shows the classification result formatted nicely on the page, proving the static file serving and frontend JavaScript work correctly in the deployed environment.
 
 
 ### Testing Commands
@@ -917,4 +954,6 @@ Plan Revision History:
 - 2025-11-13: Initial plan created. Assumes OpenAI Moderation API with image support and GCP Cloud Run deployment. User specified GCP with project number and ID. Plan follows PLANS.md format with all required sections (Progress, Surprises & Discoveries, Decision Log, Outcomes & Retrospective). Plan is self-contained for novice implementation. Includes note about OpenAI API potentially not supporting images directly and alternative approaches. Formatted without nested code fences per PLANS.md requirements.
 
 - 2025-11-13: Added simple web UI for browser-based testing per user request. User wanted an easy way to test without always using command line. Web UI includes static HTML/CSS/JS files served by FastAPI, with drag-and-drop file upload, visual feedback, and formatted results display. Updated project structure, progress checklist, decision log, Dockerfile, and all relevant sections. Command-line testing remains available alongside web UI.
+
+- 2025-11-13: Fixed critical implementation gaps identified in plan review. Updated Step 3 to use modern OpenAI SDK client pattern (OpenAI client instance) instead of deprecated global API key pattern. Added Step 4.5 with complete web UI implementation instructions for creating static/index.html, static/style.css, and static/script.js files. Updated Step 4 to include CORS middleware configuration and static file mounting. Updated Step 1 to include creating static directory. Updated Step 6 Dockerfile to copy static files. Updated validation section to include web UI testing. These changes ensure the plan is fully implementable end-to-end without missing critical components.
 
