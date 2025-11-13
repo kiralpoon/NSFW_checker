@@ -9,7 +9,9 @@ This document must be maintained in accordance with .agent/PLANS.md in the repos
 
 After completing this work, users will be able to send an image to a web API endpoint and receive a JSON response indicating whether the image is "Safe" or "Not Safe" based on NSFW (Not Safe For Work) content detection. The system will block sexually explicit content, nudity, and potentially underage subjects while applying custom rules (for example, male topless images may be acceptable while female topless images are not).
 
-The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serverless container platform that automatically scales based on incoming requests and charges only for actual usage. Users can verify the system works by uploading test images via HTTP POST request and receiving immediate classification results.
+Users can interact with the system in multiple ways: through a simple web UI for easy browser-based testing, via command-line tools like curl for automation and scripting, or through the auto-generated API documentation at /docs for exploration and testing.
+
+The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serverless container platform that automatically scales based on incoming requests and charges only for actual usage. Users can verify the system works by uploading test images via the web UI, HTTP POST requests, or the interactive API documentation.
 
 
 ## Progress
@@ -17,13 +19,15 @@ The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serve
 - [ ] Set up Python project structure with FastAPI framework
 - [ ] Create requirements.txt with all necessary Python packages
 - [ ] Implement core NSFW checker module using OpenAI API
-- [ ] Create FastAPI endpoint to accept image uploads
+- [ ] Create FastAPI endpoints to accept image uploads
 - [ ] Add custom rule logic for edge cases
+- [ ] Create simple web UI for browser-based testing
+- [ ] Configure FastAPI to serve static files and web UI
 - [ ] Create Dockerfile for containerization
 - [ ] Write cloudbuild.yaml for GCP deployment automation
 - [ ] Configure environment variables and secrets
 - [ ] Deploy to GCP Cloud Run
-- [ ] Test deployed API with sample images
+- [ ] Test deployed API with sample images via web UI and command line
 - [ ] Document API usage in README
 
 
@@ -44,6 +48,10 @@ The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serve
 
 - Decision: Accept images via multipart/form-data file upload and optionally base64 encoded strings
   Rationale: Covers both direct file uploads (easier for testing) and programmatic API usage (base64 in JSON). Most flexible for various client types.
+  Date: 2025-11-13
+
+- Decision: Include a simple web UI for browser-based testing
+  Rationale: User requested an easy way to test without command-line tools. A single-page HTML interface with drag-and-drop file upload provides immediate visual feedback and makes the API accessible to non-technical users. FastAPI can serve static files directly without needing a separate frontend server.
   Date: 2025-11-13
 
 
@@ -85,6 +93,10 @@ The project structure will be:
     │   ├── main.py              (FastAPI application and routes)
     │   ├── nsfw_checker.py      (OpenAI integration and logic)
     │   └── config.py            (Configuration management)
+    ├── static/
+    │   ├── index.html           (Web UI for testing)
+    │   ├── style.css            (Styling for web UI)
+    │   └── script.js            (Client-side JavaScript)
     ├── tests/
     │   ├── __init__.py
     │   └── test_api.py          (Basic API tests)
@@ -903,4 +915,6 @@ When implementing, test with sample images first to verify the OpenAI integratio
 Plan Revision History:
 
 - 2025-11-13: Initial plan created. Assumes OpenAI Moderation API with image support and GCP Cloud Run deployment. User specified GCP with project number and ID. Plan follows PLANS.md format with all required sections (Progress, Surprises & Discoveries, Decision Log, Outcomes & Retrospective). Plan is self-contained for novice implementation. Includes note about OpenAI API potentially not supporting images directly and alternative approaches. Formatted without nested code fences per PLANS.md requirements.
+
+- 2025-11-13: Added simple web UI for browser-based testing per user request. User wanted an easy way to test without always using command line. Web UI includes static HTML/CSS/JS files served by FastAPI, with drag-and-drop file upload, visual feedback, and formatted results display. Updated project structure, progress checklist, decision log, Dockerfile, and all relevant sections. Command-line testing remains available alongside web UI.
 
