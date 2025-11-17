@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     openai_api_key: str
     port: int = 8080
     max_file_size_mb: int = 25
+    cors_origins: str = ""  # Comma-separated list, empty means allow all in dev
+    rate_limit: str = "10/minute"  # Rate limit for API endpoints
 
     class Config:
         env_file = ".env"

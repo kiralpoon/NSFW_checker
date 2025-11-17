@@ -22,6 +22,21 @@ def encode_image_to_base64(image_bytes: bytes) -> str:
     return base64.b64encode(image_bytes).decode("utf-8")
 
 
+def detect_image_mime_type(image_bytes: bytes) -> str:
+    """Detect the MIME type of an image from its bytes."""
+
+    with Image.open(BytesIO(image_bytes)) as img:
+        format_to_mime = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+            "BMP": "image/bmp",
+            "TIFF": "image/tiff",
+        }
+        return format_to_mime.get(img.format or "JPEG", "image/jpeg")
+
+
 def _normalize_result(result: Any) -> Dict[str, Any]:
     """Convert OpenAI SDK objects into a serialisable dictionary."""
 
@@ -41,9 +56,10 @@ def _normalize_result(result: Any) -> Dict[str, Any]:
 def _fallback_moderation_via_chat(image_bytes: bytes) -> Dict[str, Any]:
     """Fallback when direct image moderation is unavailable."""
 
-    data_uri = f"data:image/jpeg;base64,{encode_image_to_base64(image_bytes)}"
+    mime_type = detect_image_mime_type(image_bytes)
+    data_uri = f"data:{mime_type};base64,{encode_image_to_base64(image_bytes)}"
     chat_response = client.chat.completions.create(
-        model="gpt-4-vision-preview",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
@@ -70,7 +86,8 @@ def _fallback_moderation_via_chat(image_bytes: bytes) -> Dict[str, Any]:
 def check_image_with_openai(image_bytes: bytes) -> Dict[str, Any]:
     """Send an image to OpenAI moderation and return the parsed result."""
 
-    data_uri = f"data:image/jpeg;base64,{encode_image_to_base64(image_bytes)}"
+    mime_type = detect_image_mime_type(image_bytes)
+    data_uri = f"data:{mime_type};base64,{encode_image_to_base64(image_bytes)}"
     try:
         response = client.moderations.create(
             model="omni-moderation-latest",
