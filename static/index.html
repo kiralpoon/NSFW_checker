@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NSFW Image Detection API</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>NSFW Image Detection API</h1>
+        <p>
+          Upload an image to check if it contains NSFW content using OpenAI's
+          moderation service.
+        </p>
+      </header>
+
+      <section class="upload">
+        <label class="file-label" for="imageInput">
+          <span>Select an image</span>
+          <input id="imageInput" type="file" accept="image/*" />
+        </label>
+        <button id="checkButton" type="button">Check Image</button>
+      </section>
+
+      <section id="preview" class="preview"></section>
+
+      <section id="result" class="result"></section>
+    </div>
+
+    <script src="/static/script.js" defer></script>
+  </body>
+</html>

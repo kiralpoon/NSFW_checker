@@ -16,24 +16,25 @@ The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serve
 
 ## Progress
 
-- [ ] Set up Python project structure with FastAPI framework
-- [ ] Create requirements.txt with all necessary Python packages
-- [ ] Implement core NSFW checker module using OpenAI API
-- [ ] Create FastAPI endpoints to accept image uploads
-- [ ] Add custom rule logic for edge cases
-- [ ] Create simple web UI for browser-based testing
-- [ ] Configure FastAPI to serve static files and web UI
-- [ ] Create Dockerfile for containerization
-- [ ] Write cloudbuild.yaml for GCP deployment automation
-- [ ] Configure environment variables and secrets
+- [x] Set up Python project structure with FastAPI framework
+- [x] Create requirements.txt with all necessary Python packages
+- [x] Implement core NSFW checker module using OpenAI API
+- [x] Create FastAPI endpoints to accept image uploads
+- [x] Add custom rule logic for edge cases
+- [x] Create simple web UI for browser-based testing
+- [x] Configure FastAPI to serve static files and web UI
+- [x] Create Dockerfile for containerization
+- [x] Write cloudbuild.yaml for GCP deployment automation
+- [ ] Configure environment variables and secrets (local .env example prepared; Secret Manager pending)
 - [ ] Deploy to GCP Cloud Run
 - [ ] Test deployed API with sample images via web UI and command line
-- [ ] Document API usage in README
+- [x] Document API usage in README
 
 
 ## Surprises & Discoveries
 
-(This section will be populated as implementation proceeds)
+- Observation: Settings initialization requires OPENAI_API_KEY at import time.
+  Evidence: Added default value in tests/test_api.py to prevent configuration errors during automated tests.
 
 
 ## Decision Log
@@ -73,7 +74,7 @@ The API will be deployed to Google Cloud Platform (GCP) using Cloud Run, a serve
 
 ## Outcomes & Retrospective
 
-(This section will be completed after major milestones and at project completion)
+Milestone 1 development complete locally. API, web UI, and supporting infrastructure files are in place and ready for containerization and deployment validation.
 
 
 ## Context and Orientation
